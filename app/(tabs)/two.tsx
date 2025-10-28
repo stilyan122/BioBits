@@ -3,10 +3,14 @@ import { ScrollView, Text, TextInput, View, Button } from 'react-native';
 import * as dna from '../../lib/dna';
 import { addHistory } from '../../lib/history';
 import { router } from 'expo-router';
+import * as Clipboard from 'expo-clipboard';
 
 export default function DnaTools() {
   // Local state for the raw input sequence shown in the TextInput
   const [seq, setSeq] = useState('');
+
+  // Keep copied state
+  const [copied, setCopied] = useState<null | 'rna' | 'aa'>(null);  
 
   // Derived values - clean the sequence
   const cleaned = useMemo(() => dna.clean(seq), [seq]);
@@ -20,7 +24,15 @@ export default function DnaTools() {
   // GC% of the original sequence, depends on seq
   const gc = useMemo(() => dna.gcContent(seq), [seq]);
 
-  const tooLong = cleaned.length > 10000; // simple guard to avoid lag on huge inputs
+  // Simple guard to avoid lag on huge inputs
+  const tooLong = cleaned.length > 10000; 
+
+  // Brief "Copied!" hint
+  const copy = async (which: 'rna' | 'aa', text: string) => {
+    await Clipboard.setStringAsync(text);
+    setCopied(which);
+    setTimeout(() => setCopied(null), 1200); 
+  };
 
   return (
     // ScrollView to allow scrolling if content overflows
@@ -78,8 +90,14 @@ export default function DnaTools() {
       <Text style={{ fontWeight:'600' }}>RNA</Text>
       <Text selectable style={{ fontFamily:'monospace' }}>{rna}</Text>
 
+      <Button title={copied === 'rna' ? 'Copied RNA!' : 'Copy RNA'}
+        onPress={() => copy('rna', rna)} />
+
       <Text style={{ fontWeight:'600' }}>AA (Translation)</Text>
       <Text selectable style={{ fontFamily:'monospace' }}>{aa}</Text>
+
+      <Button title={copied === 'aa' ? 'Copied AA!' : 'Copy AA'}
+        onPress={() => copy('aa', aa)} />
     </ScrollView>
   );
 }
