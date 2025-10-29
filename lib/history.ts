@@ -1,13 +1,21 @@
 // Import AsyncStorage to persist small key/value data on device (survives app restarts).
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+// Max number of items to keep (keeps storage small + fast)
+const MAX_HISTORY = 20;
+
 // Shape of one saved operation in history
 export type HistoryItem = {
-  id: string;    // Unique identifier                                  
-  type: "clean" | "revcomp" | "transcribe" | "translate";  // What operation produced this entry
-  input: string; // Original input sequence                
-  output: string; // Resulting output sequence                                    
-  at: number; // Timestamp (ms since epoch) when this entry was created                                   
+  id: string;    
+  type:
+    | "clean"
+    | "revcomp"
+    | "transcribe"
+    | "translate"
+    | "quiz";    
+  input: string;  
+  output: string; 
+  at: number;    
 };
 
 // Single storage key under which the entire history list is stored (JSON stringified).
@@ -35,8 +43,8 @@ export const addHistory = async (h: Omit<HistoryItem, "id" | "at">) => {
     at: Date.now(), // Current time in ms
   };
 
-  // Prepend and cap at 20 entries
-  const list = [item, ...(await loadHistory())].slice(0, 20);
+  // Prepend and cap at MAX_HISTORY entries
+  const list = [item, ...(await loadHistory())].slice(0, MAX_HISTORY);
 
   // Persist updated list
   await AsyncStorage.setItem(KEY, JSON.stringify(list));
@@ -48,4 +56,12 @@ export const addHistory = async (h: Omit<HistoryItem, "id" | "at">) => {
 // Wipe all saved history by removing the key entirely
 export const clearHistory = async () => {
   await AsyncStorage.removeItem(KEY);
+};
+
+// Convenience helper: save a quiz attempt (score + avg time)
+export const addQuizHistory = async (score: number, total: number, avgMs: number) => {
+  const input = `${total} Qs`;                        
+  const secs = (avgMs / 1000).toFixed(2);              
+  const output = `${score}/${total} • ${secs} s avg`;  
+  return addHistory({ type: "quiz", input, output });
 };
