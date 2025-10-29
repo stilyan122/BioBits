@@ -1,4 +1,4 @@
-import * as Clipboard from "expo-clipboard"; // npx expo install expo-clipboard
+import * as Clipboard from "expo-clipboard";
 import { useMemo, useState } from "react";
 import {
   Alert,
@@ -141,7 +141,7 @@ export default function ToolsScreen() {
           multiline
           value={seq}
           onChangeText={setSeq}
-          placeholder="Paste DNA (A C G T)…"
+          placeholder="Paste DNA (A C G T)..."
           autoCapitalize="characters"
           autoCorrect={false}
           spellCheck={false}

@@ -90,7 +90,6 @@ export default function HelixStripe({
             );
           })}
 
-          {/* Strands with rounded caps */}
           <Path d={dA} stroke="url(#gradA)" strokeWidth={stroke} strokeLinecap="round" fill="none" />
           <Path d={dB} stroke="url(#gradB)" strokeWidth={stroke} strokeLinecap="round" fill="none" />
         </G>
