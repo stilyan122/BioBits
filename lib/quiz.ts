@@ -53,7 +53,7 @@ export function makeCodonToAA(n = 10): Question[] {
         //  Combine and shuffle options so the correct position varies uniformly
         const choices = shuffle([ans, ...wrongs]);
 
-        // Push the final question object
+        // Push the final question object.
         qs.push({
             prompt: `What AA does ${codon} code?`,
             choices,
@@ -61,5 +61,7 @@ export function makeCodonToAA(n = 10): Question[] {
             meta: { codon },
         });
     }
+
+  // Array of n questions.
   return qs;
 }
