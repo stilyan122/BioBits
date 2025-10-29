@@ -1,4 +1,4 @@
-import * as Clipboard from "expo-clipboard";
+import * as Clipboard from "expo-clipboard"; // npx expo install expo-clipboard
 import { useMemo, useState } from "react";
 import {
   Alert,
@@ -44,20 +44,51 @@ function Btn({
   );
 }
 
+function Pill({
+  active,
+  label,
+  onPress,
+}: {
+  active: boolean;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[
+        styles.pill,
+        active ? styles.pillActive : styles.pillIdle,
+      ]}
+    >
+      <Text style={active ? styles.pillActiveText : styles.pillIdleText}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 export default function ToolsScreen() {
   // Raw input
   const [seq, setSeq] = useState("");
 
+  // Translation config
+  const [frame, setFrame] = useState<0 | 1 | 2>(0);
+  const [trimStop, setTrimStop] = useState<boolean>(false);
+
   // Derived values (fast O(n))
   const cleaned = useMemo(() => dna.clean(seq), [seq]);
-  const rna = useMemo(() => dna.transcribe(seq), [seq]);     // live preview
-  const aa  = useMemo(() => dna.translate(rna), [rna]);      // live preview
-  const gc  = useMemo(() => dna.gcContent(seq), [seq]);      // % with 2 d.p.
+  const rna = useMemo(() => dna.transcribe(seq), [seq]); // live preview
+  const aa  = useMemo(
+    () => dna.translateFrame(rna, frame, trimStop ? "trim" : "keep"),
+    [rna, frame, trimStop]
+  ); // live preview with frame/stop
+  const gc  = useMemo(() => dna.gcContent(seq), [seq]);  // % with 2 d.p.
 
   // Enable/disable logic
   const hasAnyInput   = seq.length > 0;
   const hasValidBases = cleaned.length > 0;
-  const canTranslate  = rna.length >= 3; // need at least one codon
+  const canTranslate  = Math.max(0, rna.length - frame) >= 3; // at least one codon in that frame
 
   // Data-quality hint: any non-ACGT present?
   const hasNoise = useMemo(
@@ -97,8 +128,14 @@ export default function ToolsScreen() {
 
   const saveTranslation = async () => {
     if (!canTranslate) return;
-    // For translation, we store RNA as input and AA as output
-    await addHistory({ type: "translate", input: rna, output: aa });
+    // Store frame + trim meta in output label for quick recall
+    const note = ` (frame=${frame}${trimStop ? ", trim" : ""})`;
+    await addHistory({
+      type: "translate",
+      input: rna,
+      output: aa + note,
+      meta: { frame, trimStop },
+    } as any);
     toast.show("Translation saved");
   };
 
@@ -108,8 +145,7 @@ export default function ToolsScreen() {
       <View style={styles.headerCard}>
         <Text style={styles.h1}>DNA Tools</Text>
         <Text style={styles.sub}>
-          Paste a DNA sequence and run Clean or Reverse-complement (these update the editor and log).
-          RNA and AA are shown live; you can Copy or save Transcription/Translation to History.
+          Paste a DNA sequence and run Clean or Reverse-complement. RNA and AA update live. You can Copy or save Transcription/Translation to History.
         </Text>
 
         {/* Stats row */}
@@ -141,7 +177,7 @@ export default function ToolsScreen() {
           multiline
           value={seq}
           onChangeText={setSeq}
-          placeholder="Paste DNA (A C G T)..."
+          placeholder="Paste DNA (A C G T)…"
           autoCapitalize="characters"
           autoCorrect={false}
           spellCheck={false}
@@ -161,20 +197,38 @@ export default function ToolsScreen() {
       <View style={styles.card}>
         <View style={styles.cardHeadRow}>
           <Text style={styles.cardTitle}>RNA (T → U)</Text>
-          <Btn title="Copy" kind="ghost" onPress={() => copy(rna, "Copied!")} disabled={!rna} />
+          <Btn title="Copy" kind="ghost" onPress={() => copy(rna, "RNA copied")} disabled={!rna} />
         </View>
         <Text selectable style={styles.mono}>{rna}</Text>
+      </View>
+
+      {/* Translation config */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Translation settings</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+          <Text style={{ fontWeight: "700", color: "#0f172a" }}>Frame:</Text>
+          <Pill active={frame === 0} label="0" onPress={() => setFrame(0)} />
+          <Pill active={frame === 1} label="1" onPress={() => setFrame(1)} />
+          <Pill active={frame === 2} label="2" onPress={() => setFrame(2)} />
+
+          <View style={{ width: 8 }} />
+          <Pill
+            active={trimStop}
+            label="Trim at stop (*)"
+            onPress={() => setTrimStop((v) => !v)}
+          />
+        </View>
       </View>
 
       {/* Translation panel (preview + copy) */}
       <View style={styles.card}>
         <View style={styles.cardHeadRow}>
-          <Text style={styles.cardTitle}>AA (translation of RNA)</Text>
-          <Btn title="Copy" kind="ghost" onPress={() => copy(aa, "Copied!")} disabled={!aa} />
+          <Text style={styles.cardTitle}>AA (translation)</Text>
+          <Btn title="Copy" kind="ghost" onPress={() => copy(aa, "AA copied")} disabled={!aa} />
         </View>
         <Text selectable style={styles.mono}>{aa}</Text>
         <Text style={styles.hint}>
-          Translation is a live preview from frame 0 and does not auto-stop at “*”.
+          Translation uses the selected frame and {trimStop ? "trims" : "keeps"} stop codons.
         </Text>
       </View>
 
@@ -272,6 +326,12 @@ const styles = StyleSheet.create({
   btnPressed: { opacity: 0.92 },
   btnText: { color: "#fff", fontWeight: "700" },
   btnGhostText: { color: "#0f172a" },
+
+  pill: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1 },
+  pillIdle: { backgroundColor: "#f8fafc", borderColor: "#e5e9f2" },
+  pillActive: { backgroundColor: "#0b63ce", borderColor: "#0b63ce" },
+  pillIdleText: { color: "#0f172a", fontWeight: "700" },
+  pillActiveText: { color: "#fff", fontWeight: "700" },
 
   mono: {
     fontFamily: Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" }),

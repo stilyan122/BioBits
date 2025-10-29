@@ -1,3 +1,5 @@
+// lib/dna.ts
+
 // Clean a raw string into a canonical DNA sequence.
 // - Uppercase everything
 // - Keep only A/C/G/T (drop spaces, digits, N, etc.)
@@ -7,7 +9,7 @@ export const clean = (s: string) => s.toUpperCase().replace(/[^ACGT]/g, '');
 // Mapping for base complements in DNA. A <-> T and C <-> G.
 const comp: Record<string,string> = { A:'T', C:'G', G:'C', T:'A' };
 
-// Compute the reverse complement of a DNA string.   <-- fixed typo
+// Compute the reverse complement of a DNA string.
 export const reverseComplement = (dna: string) => {
   // Sanitize sequence.
   const x = clean(dna);
@@ -41,7 +43,7 @@ export const CODON: Record<string,string> = {
   AGU:'S',AGC:'S',AGA:'R',AGG:'R',GGU:'G',GGC:'G',GGA:'G',GGG:'G',
 };
 
-// Translate an RNA string into an amino-acid sequence.
+// Translate an RNA string into an amino-acid sequence (frame 0, no auto-stop).
 // Behavior notes:
 // - We strip non A/C/G/U just in case input is messy.
 // - We read in steps of 3; unknown codons become '?'.
@@ -62,27 +64,36 @@ export const translate = (rna: string) => {
   return aa;
 };
 
+// NEW: Frame-aware translator with optional stop trimming.
+// frame: 0 | 1 | 2  (offset into RNA before grouping by 3)
+// stopMode: 'keep' (include '*' as in translate) or 'trim' (cut at first '*')
+export const translateFrame = (
+  rna: string,
+  frame: 0 | 1 | 2 = 0,
+  stopMode: 'keep' | 'trim' = 'keep'
+) => {
+  const r = rna.replace(/[^ACGU]/g, '');
+  let aa = '';
+  for (let i = frame; i + 2 < r.length; i += 3) {
+    const codon = r.slice(i, i + 3);
+    const a = CODON[codon] ?? '?';
+    if (stopMode === 'trim' && a === '*') break;
+    aa += a;
+  }
+  return aa;
+};
+
 // GC content as a percentage of G and C bases in the DNA string.
 // Definition: GC% = 100 * (#G + #C) / N, where N = length(cleaned DNA).
+// Edge case: empty after cleaning -> returns 0 (avoids NaN).
+// Complexity: O(n).
 export const gcContent = (dna: string) => {
-  // Keep only A/C/G/T.
   const x = clean(dna);
-
-  // Total valid bases.
   const n = x.length; 
-
-  // Avoid division by 0.
-  if (!n) 
-    return 0;
-
-  // Count for G and C.
+  if (!n) return 0;
   let g = 0;
-
-  // Linear scan.
   for (const c of x) 
     if (c === 'G' || c === 'C') 
       g++;
-
-  // Multiply first, then divide, then round to 2 dps.
   return Math.round((10000 * g) / n) / 100; 
 };
