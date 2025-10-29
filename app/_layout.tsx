@@ -6,6 +6,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 import 'react-native-reanimated';
+import HeaderNav from '../components/HeaderNav';
 
 export { ErrorBoundary } from 'expo-router';
 
@@ -21,8 +22,8 @@ export default function RootLayout() {
 
   useEffect(() => { if (error) throw error; }, [error]);
   useEffect(() => { if (loaded) SplashScreen.hideAsync(); }, [loaded]);
-  if (!loaded) return null;
 
+  if (!loaded) return null;
   return <RootLayoutNav />;
 }
 
@@ -31,18 +32,12 @@ function RootLayoutNav() {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack
-        screenOptions={{
-          headerShown: true,                // we can swap to a custom header later
-          contentStyle: { backgroundColor: '#fafafa' },
-        }}
-      >
-        <Stack.Screen name="index"   options={{ title: 'Home' }} />
-        <Stack.Screen name="tools"   options={{ title: 'DNA Tools' }} />
-        <Stack.Screen name="quiz"    options={{ title: 'Quiz' }} />
-        {/* Keep only if you have the file */}
-        <Stack.Screen name="history" options={{ title: 'History' }} />
-      </Stack>
+      <Stack screenOptions={{ header: () => <HeaderNav />, contentStyle: { backgroundColor: '#fafafa' } }}>
+      <Stack.Screen name="index" />
+      <Stack.Screen name="tools" />
+      <Stack.Screen name="quiz" />
+      <Stack.Screen name="history" />
+    </Stack>
     </ThemeProvider>
   );
 }
