@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react';
-import { ScrollView, Text, TextInput, View, Button } from 'react-native';
-import * as dna from '../../lib/dna';
-import { addHistory } from '../../lib/history';
-import { router } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
+import { router } from 'expo-router';
+import { useMemo, useState } from 'react';
+import { Button, ScrollView, Text, TextInput, View } from 'react-native';
+import * as dna from '../lib/dna';
+import { addHistory } from '../lib/history';
 
 export default function DnaTools() {
   // Local state for the raw input sequence shown in the TextInput

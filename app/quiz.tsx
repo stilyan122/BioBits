@@ -10,16 +10,22 @@ import { useEffect, useMemo, useRef, useState } from "react";
 // RN UI primitives
 import { Button, Pressable, ScrollView, Text, View } from "react-native";
 
-// Our question generator + type
-import { makeCodonToAA, Question } from "../lib/quiz";
+// Our question generators + type
+import { makeAAToCodon, makeCodonToAA, Question } from "../lib/quiz";
 
 // Generate questions once when the component mounts (memoized so it doesn't regenerate)
 export default function QuizScreen() {
   // Seed to force new question sets on Restart (no navigation needed)
   const [seed, setSeed] = useState(0);
 
-  // 10 questions - O(n) generator; re-run when seed changes
-  const qs = useMemo(() => makeCodonToAA(10), [seed]);
+  // Mode: "Codon -> AA" (default) or "AA -> Codon"
+  const [mode, setMode] = useState<"codonToAA" | "aaToCodon">("codonToAA");
+
+  // 10 questions - O(n) generator; re-run when seed OR mode changes
+  const qs = useMemo(
+    () => (mode === "codonToAA" ? makeCodonToAA(10) : makeAAToCodon(10)),
+    [seed, mode]
+  );
 
   // Router for navigation (Back button)
   const router = useRouter();
@@ -57,27 +63,44 @@ export default function QuizScreen() {
     }
   }, [i, score, total, avgMs]);
 
+  // Small helper: switching mode resets everything cleanly.
+  const switchMode = (next: "codonToAA" | "aaToCodon") => {
+    setMode(next);
+    setSeed(s => s + 1);   // new question set
+    setI(0);               // reset index
+    setScore(0);           // reset score
+    setTimes([]);          // reset times
+    setPicked(null);       // clear selection
+    savedRef.current = false; // allow saving the next attempt
+  };
+
   // If we've answered all questions, render the results view.
   if (i >= total) {
     return (
       <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+        {/* Mode switch always available */}
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <Button title="Codon → AA" onPress={() => switchMode("codonToAA")} />
+          <Button title="AA → Codon" onPress={() => switchMode("aaToCodon")} />
+        </View>
+
         <Text style={{ fontSize: 22, fontWeight: "700" }}>Results</Text>
+        <Text>Mode: {mode === "codonToAA" ? "Codon → AA" : "AA → Codon"}</Text>
         <Text>Score: {score} / {total}</Text>
         <Text>Avg time/question: {(avgMs / 1000).toFixed(2)} s</Text>
+
         <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
-          {/* Restart: regenerate questions + reset local state */}
+          {/* Restart: regenerate questions + reset local state (same mode) */}
           <Button title="Restart" onPress={() => {
-            setSeed(s => s + 1);   // new question set
-            setI(0);               // reset index
-            setScore(0);           // reset score
-            setTimes([]);          // reset times
-            setPicked(null);       // clear selection
-            savedRef.current = false; // allow saving next attempt
+            setSeed(s => s + 1);
+            setI(0);
+            setScore(0);
+            setTimes([]);
+            setPicked(null);
+            savedRef.current = false;
           }}/>
           {/* Back out to previous screen (Tab One) */}
           <Button title="Back to Home" onPress={() => router.back()} />
-          {/* Optional: jump to History (if you have /history route) */}
-          {/* <Button title="View History" onPress={() => router.push('/history' as any)} /> */}
         </View>
       </ScrollView>
     );
@@ -118,8 +141,14 @@ export default function QuizScreen() {
   // Active question view.
   return (
     <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
+      {/* Mode switch always visible */}
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        <Button title="Codon → AA" onPress={() => switchMode("codonToAA")} />
+        <Button title="AA → Codon" onPress={() => switchMode("aaToCodon")} />
+      </View>
+
       <Text style={{ fontSize: 16, color: "#666" }}>
-        Question {i + 1} / {total}
+        Mode: {mode === "codonToAA" ? "Codon → AA" : "AA → Codon"} • Question {i + 1} / {total}
       </Text>
 
       <Text style={{ fontSize: 20, fontWeight: "700" }}>{q.prompt}</Text>

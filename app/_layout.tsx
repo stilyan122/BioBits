@@ -1,66 +1,47 @@
-// Imports which load the vector icon, font metadata so icons render correctly.
-
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
+import { useColorScheme } from 'react-native';
 import 'react-native-reanimated';
-import { useColorScheme } from '@/components/useColorScheme';
 
-export {
-  ErrorBoundary,
-} from 'expo-router';
+export { ErrorBoundary } from 'expo-router';
 
-export const unstable_settings = {
-  initialRouteName: '(tabs)',
-};
+export const unstable_settings = { initialRouteName: 'index' };
 
-// This tells Expo not to hide the splash automactically - we'll hide it manually
-// once the fonts are loaded.
 SplashScreen.preventAutoHideAsync();
 
-// Waits for fonts. 
 export default function RootLayout() {
-  // Asynchronously loads custom fonts.
   const [loaded, error] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
     ...FontAwesome.font,
   });
 
-  // If there was an error loading the fonts, throw it.
-  useEffect(() => {
-    if (error) throw error;
-  }, [error]);
+  useEffect(() => { if (error) throw error; }, [error]);
+  useEffect(() => { if (loaded) SplashScreen.hideAsync(); }, [loaded]);
+  if (!loaded) return null;
 
-  // When loaded becomes true, it hides the splash screen.
-  useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [loaded]);
-
-  if (!loaded) {
-    return null;
-  }
-
-  // Renders the root layout navigation.
   return <RootLayoutNav />;
 }
 
 function RootLayoutNav() {
-  // This helper returns the current color scheme (light or dark or system).
   const colorScheme = useColorScheme();
 
-  // We pass the scheme to the ThemeProvider to get dark/light colors for headers, backgrounds, etc.
-  
-  // Stack is from the expo-router and defines a stack navigator at the root.
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
+      <Stack
+        screenOptions={{
+          headerShown: true,                // we can swap to a custom header later
+          contentStyle: { backgroundColor: '#fafafa' },
+        }}
+      >
+        <Stack.Screen name="index"   options={{ title: 'Home' }} />
+        <Stack.Screen name="tools"   options={{ title: 'DNA Tools' }} />
+        <Stack.Screen name="quiz"    options={{ title: 'Quiz' }} />
+        {/* Keep only if you have the file */}
+        <Stack.Screen name="history" options={{ title: 'History' }} />
       </Stack>
     </ThemeProvider>
   );

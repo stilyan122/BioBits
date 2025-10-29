@@ -65,3 +65,53 @@ export function makeCodonToAA(n = 10): Question[] {
   // Array of n questions.
   return qs;
 }
+
+// Reverse index: AA -> [codons...]
+const AA2CODONS: Record<string, string[]> = (() => {
+
+  const map: Record<string, string[]> = {};
+
+  for (const codon of CODONS_NO_STOP) {
+    // Single letter AA.
+    const aa = CODON[codon];          
+    
+    // Accumulate codons per AA
+    (map[aa] ??= []).push(codon);            
+  }
+
+  return map;
+})();
+
+// Unique list of non-stop amino acids (single letters)
+const AAs = Object.keys(AA2CODONS);
+
+// Build n multiple-choice questions of the form "AA -> Codon".
+export function makeAAToCodon(n = 10): Question[] {
+  const qs: Question[] = [];
+
+  for (let k = 0; k < n; k++) {
+    // Pick a random amino acid
+    const aa = AAs[Math.floor(Math.random() * AAs.length)];
+
+    // Choose one correct codon for that AA (if multiple exist, pick one randomly)
+    const correctCodons = AA2CODONS[aa];
+    const correct = correctCodons[Math.floor(Math.random() * correctCodons.length)];
+
+    // Distractors: codons that map to other AAs (not this one)
+    const pool = CODONS_NO_STOP.filter(c => CODON[c] !== aa);
+    shuffle(pool);
+    const wrongs = pool.slice(0, 3);
+
+    // Final options, shuffled
+    const choices = shuffle([correct, ...wrongs]);
+
+    qs.push({
+      prompt: `Which codon codes for ${aa}?`,
+      choices,
+      correct,
+      meta: { codon: correct },
+    });
+  }
+
+  return qs;
+}
