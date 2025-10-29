@@ -1,165 +1,209 @@
-// Navigation helpers (push/replace/back)
-import { useRouter } from "expo-router";
-
-// History logging for quiz attempts
+// app/quiz.tsx
+import { useMemo, useRef, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useToast } from "../components/Toast";
 import { addQuizHistory } from "../lib/history";
+import { makeQuestions, Question, QuizMode } from "../lib/quiz";
 
-// React hooks for state, memo, timers
-import { useEffect, useMemo, useRef, useState } from "react";
-
-// RN UI primitives
-import { Button, Pressable, ScrollView, Text, View } from "react-native";
-
-// Our question generators + type
-import { makeAAToCodon, makeCodonToAA, Question } from "../lib/quiz";
-
-// Generate questions once when the component mounts (memoized so it doesn't regenerate)
-export default function QuizScreen() {
-  // Seed to force new question sets on Restart (no navigation needed)
-  const [seed, setSeed] = useState(0);
-
-  // Mode: "Codon -> AA" (default) or "AA -> Codon"
-  const [mode, setMode] = useState<"codonToAA" | "aaToCodon">("codonToAA");
-
-  // 10 questions - O(n) generator; re-run when seed OR mode changes
-  const qs = useMemo(
-    () => (mode === "codonToAA" ? makeCodonToAA(10) : makeAAToCodon(10)),
-    [seed, mode]
+// Small UI atoms
+function Pill({ active, label, onPress }: { active: boolean; label: string; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={[S.pill, active ? S.pillActive : S.pillIdle]}>
+      <Text style={active ? S.pillActiveText : S.pillIdleText}>{label}</Text>
+    </Pressable>
   );
+}
 
-  // Router for navigation (Back button)
-  const router = useRouter();
-  
-  // Current question index (0 - qs.length-1)
-  const [i, setI] = useState(0);                  
+function PrimaryButton({ title, onPress }: { title: string; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [S.primaryBtn, pressed && { opacity: 0.92 }]}>
+      <Text style={S.primaryBtnText}>{title}</Text>
+    </Pressable>
+  );
+}
 
-  // Number of correct answers so far
-  const [score, setScore] = useState(0);           
+const MIN_Q = 1;
+const MAX_Q = 200;
+const clamp = (v: number, lo = MIN_Q, hi = MAX_Q) => Math.max(lo, Math.min(hi, v));
 
-  // Time per question in ms (for averaging)
-  const [times, setTimes] = useState<number[]>([]); 
+export default function QuizScreen() {
+  const toast = useToast();
 
-  // Currently picked choice; null when waiting
-  const [picked, setPicked] = useState<string | null>(null); 
+  // Config
+  const [mode, setMode] = useState<QuizMode>("codon2aa");
+  const [count, setCount] = useState<number>(10);
 
-  // Ref holding the start time (ms) of the current question.
-  const t0 = useRef<number>(Date.now());         
+  // Hidden seed (no UI). We reseed automatically on each Start.
+  const [seed, setSeed] = useState<number>(() => Date.now() >>> 0);
 
-  // Whenever the question index changes, reset the start time.
-  useEffect(() => { t0.current = Date.now(); }, [i]);
+  // Flow state
+  const [started, setStarted] = useState<boolean>(false);
 
-  // ---- Derived values used in both question and results views ----
-  const total = qs.length;
-  const avgMs = times.length
-    ? Math.round(times.reduce((a, b) => a + b, 0) / times.length)
-    : 0;
+  // Deterministic questions for current config
+  const qs = useMemo(() => makeQuestions(mode, count, seed), [mode, count, seed]);
 
-  // ---- ONE-TIME save of quiz attempt after completion (top-level hooks!) ----
-  const savedRef = useRef(false);
-  useEffect(() => {
-    if (i >= total && !savedRef.current) {
-      savedRef.current = true;
-      addQuizHistory(score, total, avgMs);
-    }
-  }, [i, score, total, avgMs]);
+  // Runtime quiz state
+  const [i, setI] = useState(0);
+  const [score, setScore] = useState(0);
+  const [times, setTimes] = useState<number[]>([]);
+  const [picked, setPicked] = useState<string | null>(null);
 
-  // Small helper: switching mode resets everything cleanly.
-  const switchMode = (next: "codonToAA" | "aaToCodon") => {
-    setMode(next);
-    setSeed(s => s + 1);   // new question set
-    setI(0);               // reset index
-    setScore(0);           // reset score
-    setTimes([]);          // reset times
-    setPicked(null);       // clear selection
-    savedRef.current = false; // allow saving the next attempt
+  // Per-question timer start ms
+  const t0 = useRef<number>(Date.now());
+
+  const begin = () => {
+    // reseed so each run varies, with no “New seed” UI
+    setSeed(Date.now() >>> 0);
+
+    setStarted(true);
+    setI(0);
+    setScore(0);
+    setTimes([]);
+    setPicked(null);
+    t0.current = Date.now();
   };
 
-  // If we've answered all questions, render the results view.
-  if (i >= total) {
+  const onPick = (choice: string) => {
+    if (picked) return; // prevent double taps while showing feedback
+    setPicked(choice);
+
+    const dt = Date.now() - t0.current;
+    const nextTimes = [...times, dt];
+    const wasCorrect = choice === qs[i].correct;
+
+    if (wasCorrect) setScore((s) => s + 1);
+    setTimes(nextTimes);
+
+    setTimeout(async () => {
+      if (i + 1 < qs.length) {
+        setI(i + 1);
+        setPicked(null);
+        t0.current = Date.now();
+      } else {
+        // Finished → jump to results
+        setPicked(choice);
+        setI(qs.length);
+
+        const total = qs.length;
+        const finalScore = wasCorrect ? score + 1 : score;
+        const avgMs = nextTimes.length
+          ? Math.round(nextTimes.reduce((a, b) => a + b, 0) / nextTimes.length)
+          : 0;
+
+        // Log attempt once here
+        await addQuizHistory({ score: finalScore, total, avgMs, seed });
+        toast.show("Quiz saved to History");
+      }
+    }, 400);
+  };
+
+  // Results view
+  if (started && i >= qs.length) {
+    const total = qs.length;
+    const avgMs = times.length ? Math.round(times.reduce((a, b) => a + b, 0) / times.length) : 0;
+
     return (
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
-        {/* Mode switch always available */}
-        <View style={{ flexDirection: "row", gap: 8 }}>
-          <Button title="Codon → AA" onPress={() => switchMode("codonToAA")} />
-          <Button title="AA → Codon" onPress={() => switchMode("aaToCodon")} />
-        </View>
+      <ScrollView contentContainerStyle={S.page}>
+        <Text style={S.h1}>Results</Text>
+        <Text style={S.p}>Mode: {mode === "codon2aa" ? "Codon → AA" : "AA → Codon"}</Text>
+        <Text style={S.p}>Score: {score} / {total}</Text>
+        <Text style={S.p}>Avg time/question: {(avgMs / 1000).toFixed(2)} s</Text>
 
-        <Text style={{ fontSize: 22, fontWeight: "700" }}>Results</Text>
-        <Text>Mode: {mode === "codonToAA" ? "Codon → AA" : "AA → Codon"}</Text>
-        <Text>Score: {score} / {total}</Text>
-        <Text>Avg time/question: {(avgMs / 1000).toFixed(2)} s</Text>
-
-        <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
-          {/* Restart: regenerate questions + reset local state (same mode) */}
-          <Button title="Restart" onPress={() => {
-            setSeed(s => s + 1);
-            setI(0);
-            setScore(0);
-            setTimes([]);
-            setPicked(null);
-            savedRef.current = false;
-          }}/>
-          {/* Back out to previous screen (Tab One) */}
-          <Button title="Back to Home" onPress={() => router.back()} />
+        <View style={{ height: 12 }} />
+        <View style={{ flexDirection: "row", gap: 12 }}>
+          <PrimaryButton
+            title="Restart"
+            onPress={() => {
+              setStarted(false);
+              // begin() will reseed + reset when pressed again
+            }}
+          />
+          <View style={{ width: 8 }} />
+          <PrimaryButton
+            title="Change settings"
+            onPress={() => {
+              // go back to start screen (keep your last chosen mode/count)
+              setStarted(false);
+            }}
+          />
         </View>
       </ScrollView>
     );
   }
 
-  // Only compute current question when i is in range
-  const q: Question = qs[i] as Question;
+  // Start screen
+  if (!started) {
+    const setCountSafe = (v: number) => setCount(clamp(Math.round(v)));
 
-  // Handle an answer tap.
-  const onPick = (choice: string) => {
-    // Ignore double taps while feedback is shown
-    if (picked) return;
+    return (
+      <ScrollView contentContainerStyle={S.page}>
+        <Text style={S.h1}>Quiz</Text>
+        <Text style={S.sub}>Test yourself on the genetic code. Choose mode and number of questions, then start.</Text>
 
-    // Lock in the selected choice (triggers feedback colors)
-    setPicked(choice);
+        <View style={S.card}>
+          <Text style={S.cardTitle}>Mode</Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+            <Pill active={mode === "codon2aa"} label="Codon → AA" onPress={() => setMode("codon2aa")} />
+            <View style={{ width: 8 }} />
+            <Pill active={mode === "aa2codon"} label="AA → Codon" onPress={() => setMode("aa2codon")} />
+          </View>
+        </View>
 
-    // Elapsed time for this question in ms
-    const dt = Date.now() - t0.current;
+        <View style={S.card}>
+          <Text style={S.cardTitle}>Questions</Text>
 
-    // Append to times array (immutable update)
-    setTimes(prev => [...prev, dt]);
+          {/* Controls row */}
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <Pressable onPress={() => setCountSafe(count - 10)} style={S.stepBtn}>
+              <Text style={S.stepText}>−10</Text>
+            </Pressable>
 
-    // If correct, increment score
-    if (choice === q.correct) setScore(s => s + 1);
+            <Pressable onPress={() => setCountSafe(count - 1)} style={[S.stepBtn, { marginLeft: 8 }]}>
+              <Text style={S.stepText}>−1</Text>
+            </Pressable>
 
-    // After a short delay to show feedback, advance to the next question or results.
-    setTimeout(() => {
-      if (i + 1 < total) {
-        setI(i + 1);      // next question
-        setPicked(null);  // clear selection
-      } else {
-        setPicked(choice); // keep for visual stability
-        setI(total);       // trigger results view
-      }
-    }, 400);
-  };
+            {/* Editable numeric input */}
+            <TextInput
+              value={String(count)}
+              onChangeText={(t) => {
+                const n = parseInt(t.replace(/[^\d]/g, "") || "0", 10);
+                setCountSafe(isNaN(n) ? MIN_Q : n);
+              }}
+              keyboardType="number-pad"
+              selectTextOnFocus
+              style={S.countInput}
+            />
 
-  // Active question view.
+            <Pressable onPress={() => setCountSafe(count + 1)} style={[S.stepBtn, { marginLeft: 8 }]}>
+              <Text style={S.stepText}>+1</Text>
+            </Pressable>
+
+            <Pressable onPress={() => setCountSafe(count + 10)} style={[S.stepBtn, { marginLeft: 8 }]}>
+              <Text style={S.stepText}>+10</Text>
+            </Pressable>
+          </View>
+
+          <Text style={S.helpText}>Allowed: {MIN_Q}-{MAX_Q}. Use the box to type any number.</Text>
+        </View>
+
+        <View style={{ height: 12 }} />
+        <PrimaryButton title="Start Quiz" onPress={begin} />
+      </ScrollView>
+    );
+  }
+
+  // Active question
+  const q: Question = qs[i];
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
-      {/* Mode switch always visible */}
-      <View style={{ flexDirection: "row", gap: 8 }}>
-        <Button title="Codon → AA" onPress={() => switchMode("codonToAA")} />
-        <Button title="AA → Codon" onPress={() => switchMode("aaToCodon")} />
-      </View>
+    <ScrollView contentContainerStyle={S.page}>
+      <Text style={S.dim}>Question {i + 1} / {qs.length}</Text>
+      <Text style={S.h2}>{q.prompt}</Text>
 
-      <Text style={{ fontSize: 16, color: "#666" }}>
-        Mode: {mode === "codonToAA" ? "Codon → AA" : "AA → Codon"} • Question {i + 1} / {total}
-      </Text>
-
-      <Text style={{ fontSize: 20, fontWeight: "700" }}>{q.prompt}</Text>
-
-      <View style={{ gap: 8 }}>
+      <View style={{ marginTop: 8 }}>
         {q.choices.map((c) => {
           const isPicked = picked === c;
           const isCorrect = c === q.correct;
-          const bg = picked
-            ? (isCorrect ? "#d1fadc" : isPicked ? "#ffd6d6" : "#f1f1f1")
-            : "#f1f1f1";
+          const bg = picked ? (isCorrect ? "#d1fadc" : isPicked ? "#ffd6d6" : "#f1f1f1") : "#f1f1f1";
 
           return (
             <Pressable
@@ -171,6 +215,7 @@ export default function QuizScreen() {
                 backgroundColor: bg,
                 borderWidth: 1,
                 borderColor: "#ddd",
+                marginBottom: 8,
               }}
             >
               <Text style={{ fontSize: 18 }}>{c}</Text>
@@ -186,3 +231,68 @@ export default function QuizScreen() {
     </ScrollView>
   );
 }
+
+const S = StyleSheet.create({
+  page: { padding: 16, paddingBottom: 24 },
+  h1: { fontSize: 24, fontWeight: "800" },
+  h2: { fontSize: 20, fontWeight: "700", marginTop: 2 },
+  sub: { color: "#475569", marginTop: 6 },
+  p: { color: "#0f172a", marginTop: 4 },
+  dim: { color: "#64748b" },
+
+  card: {
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#e7edf6",
+    borderRadius: 14,
+    padding: 14,
+    marginTop: 12,
+  },
+  cardTitle: { fontSize: 16, fontWeight: "800", marginBottom: 8 },
+
+  pill: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1 },
+  pillIdle: { backgroundColor: "#f8fafc", borderColor: "#e5e9f2" },
+  pillActive: { backgroundColor: "#0b63ce", borderColor: "#0b63ce" },
+  pillIdleText: { color: "#0f172a", fontWeight: "700" },
+  pillActiveText: { color: "#fff", fontWeight: "700" },
+
+  stepBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#e5e9f2",
+    backgroundColor: "#f8fafc",
+  },
+  stepText: { fontWeight: "800", color: "#0f172a" },
+
+  countInput: {
+    marginHorizontal: 8,
+    width: 72,
+    height: 40,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: "#e5e9f2",
+    backgroundColor: "#f8fafc",
+    borderRadius: 10,
+    textAlign: "center",
+    fontSize: 18,
+    fontWeight: "800",
+  },
+
+  helpText: { marginTop: 8, color: "#64748b", fontSize: 12 },
+
+  primaryBtn: {
+    width: "100%",
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: "#0b63ce",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  primaryBtnText: { color: "#fff", fontWeight: "800", fontSize: 16 },
+});

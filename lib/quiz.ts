@@ -1,117 +1,94 @@
-// Import the RNA codon -> amino-acid map from our DNA module.
+// lib/quiz.ts
+// Quiz generators with optional deterministic seeding
+
 import { CODON } from "./dna";
 
+// ---------- Types ----------
 export type Question = {
-  prompt: string;           // for example: "What AA does AUG code?"
-  choices: string[];        // for example: ["M","L","I","V"] (shuffled)
-  correct: string;          // for example: "M"
-  meta: { codon: string };  // helpful for review/debug
+  prompt: string;          // e.g., "What AA does AUG code?" or "Which codon codes for M?"
+  choices: string[];       // shuffled options
+  correct: string;         // correct answer (single-letter AA or codon)
+  meta: Record<string, any>;
 };
 
-const shuffle = <T,>(arr: T[]) => {
-  // In-place Fisher–Yates shuffle (uniform over permutations) for 
-  // shuffling (unbiased shuffle).
+export type QuizMode = "codon2aa" | "aa2codon";
+
+// ---------- Simple seeded RNG (Mulberry32) ----------
+function mulberry32(seed: number) {
+  let t = seed >>> 0;
+  return function rng() {
+    t += 0x6D2B79F5;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// ----------- Utilities -----------
+function shuffle<T>(arr: T[], rng: () => number) {
   for (let i = arr.length - 1; i > 0; i--) {
-    // Pick a random index and swap with current.
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(rng() * (i + 1));
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
-
-  // Return shuffled array.
   return arr;
-};
+}
 
-// Precompute a list of all non-stop codons (exclude '*' answers).
-// Reason: we don't want questions whose correct answer is a stop.
-const CODONS_NO_STOP = Object.keys(CODON).filter(c => CODON[c] !== "*");
+// Non-stop codons and AA sets
+const CODONS_NO_STOP = Object.keys(CODON).filter((c) => CODON[c] !== "*");
+const AA_NO_STOP = Array.from(new Set(CODONS_NO_STOP.map((c) => CODON[c]))).sort();
 
-// Precompute the set of unique amino acids that are not stop ('*').
-// Reason: for distractors we want distinct AAs different from the correct.
-const AA_NO_STOP = Array.from(new Set(CODONS_NO_STOP.map(c => CODON[c])));
+// Map AA -> list of codons (non-stop)
+const AA_TO_CODONS: Record<string, string[]> = AA_NO_STOP.reduce((acc, aa) => {
+  acc[aa] = CODONS_NO_STOP.filter((c) => CODON[c] === aa);
+  return acc;
+}, {} as Record<string, string[]>);
 
-// Build n multiple-choice questions of the form "Codon -> AA".
-export function makeCodonToAA(n = 10): Question[] {
-    // Accumulate questions here.
-    const qs: Question[] = [];
+// ----------- Generators -----------
+export function makeCodonToAA(n: number, seed?: number): Question[] {
+  const rng = seed == null ? Math.random : mulberry32(seed);
+  const qs: Question[] = [];
+  for (let k = 0; k < n; k++) {
+    const codon = CODONS_NO_STOP[Math.floor(rng() * CODONS_NO_STOP.length)];
+    const ans = CODON[codon]; // single-letter AA
 
-    for (let k = 0; k < n; k++) {
-        // Pick a random codon from the allowed pool
-        const codon = CODONS_NO_STOP[Math.floor(Math.random() * 
-            CODONS_NO_STOP.length)];
+    const pool = AA_NO_STOP.filter((a) => a !== ans);
+    shuffle(pool, rng);
+    const wrongs = pool.slice(0, 3);
 
-        // Compute the correct answer via the genetic code.
-        const ans = CODON[codon];
-
-        // Build a pool of wrong answers by excluding the correct AA
-        const pool = AA_NO_STOP.filter(a => a !== ans);
-
-        // Shuffle that pool and take the first 3 as distractors 
-        // (unique by construction)
-        shuffle(pool);
-        const wrongs = pool.slice(0, 3);
-
-        //  Combine and shuffle options so the correct position varies uniformly
-        const choices = shuffle([ans, ...wrongs]);
-
-        // Push the final question object.
-        qs.push({
-            prompt: `What AA does ${codon} code?`,
-            choices,
-            correct: ans,
-            meta: { codon },
-        });
-    }
-
-  // Array of n questions.
+    qs.push({
+      prompt: `What AA does ${codon} code?`,
+      choices: shuffle([ans, ...wrongs], rng),
+      correct: ans,
+      meta: { codon, type: "codon2aa" },
+    });
+  }
   return qs;
 }
 
-// Reverse index: AA -> [codons...]
-const AA2CODONS: Record<string, string[]> = (() => {
-
-  const map: Record<string, string[]> = {};
-
-  for (const codon of CODONS_NO_STOP) {
-    // Single letter AA.
-    const aa = CODON[codon];          
-    
-    // Accumulate codons per AA
-    (map[aa] ??= []).push(codon);            
-  }
-
-  return map;
-})();
-
-// Unique list of non-stop amino acids (single letters)
-const AAs = Object.keys(AA2CODONS);
-
-// Build n multiple-choice questions of the form "AA -> Codon".
-export function makeAAToCodon(n = 10): Question[] {
+export function makeAAToCodon(n: number, seed?: number): Question[] {
+  const rng = seed == null ? Math.random : mulberry32(seed);
   const qs: Question[] = [];
-
   for (let k = 0; k < n; k++) {
-    // Pick a random amino acid
-    const aa = AAs[Math.floor(Math.random() * AAs.length)];
+    const aa = AA_NO_STOP[Math.floor(rng() * AA_NO_STOP.length)];
+    const correctCodons = AA_TO_CODONS[aa];
+    const correct = correctCodons[Math.floor(rng() * correctCodons.length)];
 
-    // Choose one correct codon for that AA (if multiple exist, pick one randomly)
-    const correctCodons = AA2CODONS[aa];
-    const correct = correctCodons[Math.floor(Math.random() * correctCodons.length)];
-
-    // Distractors: codons that map to other AAs (not this one)
-    const pool = CODONS_NO_STOP.filter(c => CODON[c] !== aa);
-    shuffle(pool);
-    const wrongs = pool.slice(0, 3);
-
-    // Final options, shuffled
-    const choices = shuffle([correct, ...wrongs]);
+    // Build distractor codons from other amino acids
+    const otherCodons = CODONS_NO_STOP.filter((c) => CODON[c] !== aa);
+    shuffle(otherCodons, rng);
+    const wrongs = otherCodons.slice(0, 3);
 
     qs.push({
       prompt: `Which codon codes for ${aa}?`,
-      choices,
+      choices: shuffle([correct, ...wrongs], rng),
       correct,
-      meta: { codon: correct },
+      meta: { aa, type: "aa2codon" },
     });
   }
-
   return qs;
+}
+
+// Master builder
+export function makeQuestions(mode: QuizMode, n: number, seed?: number): Question[] {
+  return mode === "codon2aa" ? makeCodonToAA(n, seed) : makeAAToCodon(n, seed);
 }
