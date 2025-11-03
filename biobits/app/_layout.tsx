@@ -1,4 +1,3 @@
-// app/_layout.tsx
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
@@ -8,17 +7,21 @@ import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, useColorScheme, View } from 'react-native';
 import 'react-native-reanimated';
 import { ToastProvider } from "../components/Toast";
+import { AuthProvider, useAuth } from "../context/AuthContext";
+import AuthGate from "../components/AuthGate";
 
 export { ErrorBoundary } from 'expo-router';
-
 export const unstable_settings = { initialRouteName: 'index' };
 
 SplashScreen.preventAutoHideAsync();
 
-/** Inline header used across the app — no separate component/file */
 function Header() {
   const router = useRouter();
   const pathname = usePathname();
+  const { user, ready, signOut } = useAuth();
+
+  const isAuthPage = pathname === "/login" || pathname === "/register";
+  if (isAuthPage || !ready) return null;
 
   const LinkBtn = ({ href, label, first = false }: { href: string; label: string; first?: boolean }) => {
     const active = pathname === href;
@@ -37,11 +40,25 @@ function Header() {
     <View style={hs.wrap}>
       <Text style={hs.brand}>BioBits</Text>
       <View style={hs.row}>
-        <LinkBtn href="/"       label="Home" first />
-        <LinkBtn href="/tools"  label="DNA Tools" />
-        <LinkBtn href="/quiz"   label="Quiz" />
-        {/* Delete the next line if you DON'T have app/history.tsx */}
-        <LinkBtn href="/history" label="History" />
+        {user ? (
+          <>
+            <LinkBtn href="/"        label="Home" first />
+            <LinkBtn href="/tools"   label="DNA Tools" />
+            <LinkBtn href="/quiz"    label="Quiz" />
+            <LinkBtn href="/history" label="History" />
+            <Text style={[hs.linkText, hs.linkSpace]}>
+              {user.displayName ?? user.email}
+            </Text>
+            <Pressable onPress={signOut} style={[hs.link, hs.linkSpace]}>
+              <Text style={hs.linkText}>Logout</Text>
+            </Pressable>
+          </>
+        ) : (
+          <>
+            <LinkBtn href="/login"    label="Sign in" first />
+            <LinkBtn href="/register" label="Register" />
+          </>
+        )}
       </View>
     </View>
   );
@@ -55,7 +72,7 @@ const hs = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
   },
   brand: { fontSize: 18, fontWeight: '800' },
-  row: { flexDirection: 'row', alignItems: 'center' },
+  row: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
   link: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10 },
   linkSpace: { marginLeft: 8 },
   linkText: { fontSize: 14, color: '#444' },
@@ -80,20 +97,29 @@ function RootLayoutNav() {
   const colorScheme = useColorScheme();
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <ToastProvider>
-        <Stack
-          screenOptions={{
-            header: () => <Header />, 
-            contentStyle: { backgroundColor: '#fafafa' },
-          }}
-        >
-          <Stack.Screen name="index" />
-          <Stack.Screen name="tools" />
-          <Stack.Screen name="quiz" />
-          <Stack.Screen name="history" />
-        </Stack>
-      </ToastProvider>
+    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+      <AuthProvider> 
+        <ToastProvider>
+          <AuthGate>
+            <Stack
+                screenOptions={{
+                  header: ({ route }) => {
+                    if (route.name === "index") return null;
+                    return <Header />;
+                  },
+                  contentStyle: { backgroundColor: "#fafafa" },
+                }}
+              >
+                <Stack.Screen name="index" />
+                <Stack.Screen name="login" />
+                <Stack.Screen name="register" />
+                <Stack.Screen name="tools" />
+                <Stack.Screen name="quiz" />
+                <Stack.Screen name="history" />
+              </Stack>
+          </AuthGate>
+        </ToastProvider>
+      </AuthProvider>
     </ThemeProvider>
   );
 }

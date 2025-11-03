@@ -1,9 +1,9 @@
-// app/history.tsx
 import * as Clipboard from "expo-clipboard";
 import { useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useToast } from "../components/Toast";
+import { useAuth } from "../context/AuthContext";
 import { clearHistory, HistoryItem, loadHistory } from "../lib/history";
 
 type Filter = "all" | "clean" | "revcomp" | "transcribe" | "translate" | "quiz";
@@ -36,7 +36,10 @@ function Badge({ type }: { type: HistoryItem["type"] }) {
 
 function fmtDate(ts: number) {
   const d = new Date(ts);
-  return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+  return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`;
 }
 
 function MonoBlock({ label, value, onCopy }: { label: string; value: string; onCopy: () => void }) {
@@ -48,7 +51,9 @@ function MonoBlock({ label, value, onCopy }: { label: string; value: string; onC
           <Text style={S.ghostBtnText}>Copy</Text>
         </Pressable>
       </View>
-      <Text selectable style={S.monoText}>{value}</Text>
+      <Text selectable style={S.monoText}>
+        {value}
+      </Text>
     </View>
   );
 }
@@ -58,38 +63,55 @@ export default function HistoryScreen() {
   const [filter, setFilter] = useState<Filter>("all");
   const toast = useToast();
 
+  const { user, ready } = useAuth();
+
   const reload = useCallback(async () => {
     const list = await loadHistory();
     setItems(list);
   }, []);
 
-  useEffect(() => { reload(); }, [reload]);
-  useFocusEffect(useCallback(() => { reload(); }, [reload]));
+  useEffect(() => {
+    reload();
+  }, [reload]);
+  useFocusEffect(
+    useCallback(() => {
+      reload();
+    }, [reload])
+  );
 
-  // Counts for pill labels
-  const counts = useMemo(() => ({
-    all: items.length,
-    clean: items.filter(i => i.type === "clean").length,
-    revcomp: items.filter(i => i.type === "revcomp").length,
-    transcribe: items.filter(i => i.type === "transcribe").length,
-    translate: items.filter(i => i.type === "translate").length,
-    quiz: items.filter(i => i.type === "quiz").length,
-  }), [items]);
+  const counts = useMemo(
+    () => ({
+      all: items.length,
+      clean: items.filter((i) => i.type === "clean").length,
+      revcomp: items.filter((i) => i.type === "revcomp").length,
+      transcribe: items.filter((i) => i.type === "transcribe").length,
+      translate: items.filter((i) => i.type === "translate").length,
+      quiz: items.filter((i) => i.type === "quiz").length,
+    }),
+    [items]
+  );
 
   const filtered = useMemo(() => {
     switch (filter) {
-      case "clean":      return items.filter(i => i.type === "clean");
-      case "revcomp":    return items.filter(i => i.type === "revcomp");
-      case "transcribe": return items.filter(i => i.type === "transcribe");
-      case "translate":  return items.filter(i => i.type === "translate");
-      case "quiz":       return items.filter(i => i.type === "quiz");
-      default:           return items;
+      case "clean":
+        return items.filter((i) => i.type === "clean");
+      case "revcomp":
+        return items.filter((i) => i.type === "revcomp");
+      case "transcribe":
+        return items.filter((i) => i.type === "transcribe");
+      case "translate":
+        return items.filter((i) => i.type === "translate");
+      case "quiz":
+        return items.filter((i) => i.type === "quiz");
+      default:
+        return items;
     }
   }, [items, filter]);
 
   const copy = async (text: string, label = "Copied!") => {
     await Clipboard.setStringAsync(text);
-    if (Platform.OS === "web") {}
+    if (Platform.OS === "web") {
+    }
     toast.show(label);
   };
 
@@ -98,6 +120,23 @@ export default function HistoryScreen() {
     setItems([]);
     toast.show("History cleared");
   };
+
+  if (!ready) {
+  return (
+    <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#f6f8fb" }}>
+      <Text style={{ color: "#64748b" }}>Checking auth…</Text>
+    </View>
+  );
+}
+
+  if (!user) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#f6f8fb", padding: 16 }}>
+        <Text style={{ fontSize: 18, fontWeight: "700" }}>Not signed in</Text>
+        <Text style={{ color: "#94a3b8", marginTop: 4 }}>Go to /login to sign in.</Text>
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={{ backgroundColor: "#f6f8fb" }} contentContainerStyle={S.page}>
@@ -109,8 +148,16 @@ export default function HistoryScreen() {
           <FilterPill label={`All (${counts.all})`} active={filter === "all"} onPress={() => setFilter("all")} />
           <FilterPill label={`Clean (${counts.clean})`} active={filter === "clean"} onPress={() => setFilter("clean")} />
           <FilterPill label={`Rev-comp (${counts.revcomp})`} active={filter === "revcomp"} onPress={() => setFilter("revcomp")} />
-          <FilterPill label={`Transcribe (${counts.transcribe})`} active={filter === "transcribe"} onPress={() => setFilter("transcribe")} />
-          <FilterPill label={`Translate (${counts.translate})`} active={filter === "translate"} onPress={() => setFilter("translate")} />
+          <FilterPill
+            label={`Transcribe (${counts.transcribe})`}
+            active={filter === "transcribe"}
+            onPress={() => setFilter("transcribe")}
+          />
+          <FilterPill
+            label={`Translate (${counts.translate})`}
+            active={filter === "translate"}
+            onPress={() => setFilter("translate")}
+          />
           <FilterPill label={`Quizzes (${counts.quiz})`} active={filter === "quiz"} onPress={() => setFilter("quiz")} />
         </View>
 
@@ -135,8 +182,8 @@ export default function HistoryScreen() {
             <Text style={S.ts}>{fmtDate(it.at)}</Text>
           </View>
 
-          <MonoBlock label="Input"  value={it.input  ?? ""} onCopy={() => copy(it.input  ?? "", "Copied!")} />
-          <MonoBlock label="Output" value={it.output ?? ""} onCopy={() => copy(it.output ?? "", "Copied!")} />
+            <MonoBlock label="Input" value={it.input ?? ""} onCopy={() => copy(it.input ?? "", "Copied!")} />
+            <MonoBlock label="Output" value={it.output ?? ""} onCopy={() => copy(it.output ?? "", "Copied!")} />
         </View>
       ))}
 
@@ -177,7 +224,14 @@ const S = StyleSheet.create({
     alignItems: "center",
     marginTop: 12,
   },
-  pill: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, marginRight: 8, marginBottom: 8 },
+  pill: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    marginRight: 8,
+    marginBottom: 8,
+  },
   pillIdle: { backgroundColor: "#f8fafc", borderColor: "#e5e9f2" },
   pillActive: { backgroundColor: "#0b63ce", borderColor: "#0b63ce" },
   pillIdleText: { color: "#0f172a", fontWeight: "700" },

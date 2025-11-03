@@ -58,3 +58,10 @@ build/
 *.aab
 *.ipa
 *.tar.gz
+
+# DotNet API folders
+bin/
+obj/
+appsettings.json
+.vs/
+appsettings.Development.json

@@ -235,7 +235,7 @@ export default function QuizScreen() {
             </Pressable>
           </View>
 
-          <Text style={S.helpText}>Allowed: {MIN_Q}–{MAX_Q}. Use the box to type any number.</Text>
+          <Text style={S.helpText}>Allowed: {MIN_Q}-{MAX_Q}. Use the box to type any number.</Text>
         </View>
 
         <View style={{ height: 12 }} />

@@ -7,8 +7,8 @@ type Props = {
   height?: number;
   turns?: number;
   stroke?: number;
-  colorA?: string;   // primary tone
-  colorB?: string;   // secondary tone (for gradient blend)
+  colorA?: string;  
+  colorB?: string;  
   rungColor?: string;
   tiltDeg?: number;
 };
@@ -18,15 +18,15 @@ export default function HelixStripe({
   height = 84,
   turns = 4.5,
   stroke = 3,
-  colorA = "#0ea5e9",   // sky-500
-  colorB = "#6366f1",   // indigo-500
-  rungColor = "#cbd5e1",// slate-300
+  colorA = "#0ea5e9",  
+  colorB = "#6366f1",   
+  rungColor = "#cbd5e1",
   tiltDeg = -5,
 }: Props) {
   const W = width, H = height;
   const cx = W / 2, cy = H / 2;
   const amp = Math.min(H * 0.38, 30);
-  const N = Math.max(120, Math.floor(W / 2)); // dense for smoothness
+  const N = Math.max(120, Math.floor(W / 2)); 
   const omega = turns * 2 * Math.PI;
 
   const A: { x: number; y: number; t: number }[] = [];
@@ -35,7 +35,6 @@ export default function HelixStripe({
   for (let i = 0; i <= N; i++) {
     const t = i / N;
     const x = t * W;
-    // Two out-of-phase strands
     const yA = cy + amp * Math.sin(omega * t);
     const yB = cy + amp * Math.sin(omega * t + Math.PI);
     A.push({ x, y: yA, t });
@@ -48,14 +47,12 @@ export default function HelixStripe({
   const dA = toPath(A);
   const dB = toPath(B);
 
-  // Rungs: place every k points; modulate opacity/width to fake depth
   const every = Math.max(6, Math.floor(N / (turns * 11)));
 
   return (
     <View style={{ width, height }}>
       <Svg width={width} height={height}>
         <Defs>
-          {/* Subtle cross-fade along X for both strands */}
           <LinearGradient id="gradA" x1="0" y1="0" x2="1" y2="0">
             <Stop offset="0" stopColor={colorA} stopOpacity={0.95} />
             <Stop offset="1" stopColor={colorB} stopOpacity={0.65} />
@@ -67,14 +64,12 @@ export default function HelixStripe({
         </Defs>
 
         <G transform={`rotate(${tiltDeg} ${cx} ${cy})`}>
-          {/* Rungs */}
           {A.map((pa, i) => {
             if (i % every !== 0) return null;
             const pb = B[i];
-            // Depth hint: front vs back using cos phase
             const depth = 0.5 + 0.5 * Math.cos(omega * pa.t);
-            const op = 0.35 + 0.35 * depth;         // 0.35..0.7
-            const w  = 1 + 1.2 * depth;             // 1..2.2
+            const op = 0.35 + 0.35 * depth;         
+            const w  = 1 + 1.2 * depth;             
             return (
               <Line
                 key={`r-${i}`}
