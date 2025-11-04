@@ -69,16 +69,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(me.data as User);
   };
 
-  const signUp = async (email: string, password: string, displayName?: string) => {
-    const body = {
-      email,
-      password,
-      role: "Student",
-      displayName: displayName || undefined
-    };
-    await api.post(routes.register, body);
+  const signUp = async (email: string, password: string) => {
+    await api.post(routes.register, { email, password, role: "Student" });
     await signIn(email, password);
-  };
+  };  
 
   const signOut = () => {
     const refresh = getToken("refresh") as string | null;

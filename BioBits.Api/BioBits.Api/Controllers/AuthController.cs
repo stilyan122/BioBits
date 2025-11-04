@@ -17,6 +17,13 @@ namespace BioBits.Api.Controllers
         private readonly IConfiguration _config;
         private readonly RoleManager<IdentityRole> _roleManager;
 
+        public class RegisterRequest
+        {
+            public string Email { get; set; } = default!;
+            public string Password { get; set; } = default!;
+            public string? Role { get; set; }
+        }
+
         public AuthController(
             UserManager<IdentityUser> userManager,
             SignInManager<IdentityUser> signInManager,
@@ -57,32 +64,32 @@ namespace BioBits.Api.Controllers
             });
         }
 
-        [AllowAnonymous]
         [HttpPost("register")]
-        public async Task<IActionResult> Register([FromBody] RegisterDto dto)
+        [AllowAnonymous] 
+        public async Task<IActionResult> Register([FromBody] RegisterRequest req)
         {
-            var user = new IdentityUser
-            {
-                UserName = dto.Email,
-                Email = dto.Email,
-                EmailConfirmed = true
-            };
+            var role = (req.Role ?? "Student").Trim();
 
-            var result = await _userManager.CreateAsync(user, dto.Password);
-            if (!result.Succeeded)
+            if (!string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(role, "Student", StringComparison.OrdinalIgnoreCase))
             {
-                return BadRequest(result.Errors);
+                role = "Student";
             }
 
-            var role = dto.Role ?? "Student";
-            if (!await _roleManager.RoleExistsAsync(role))
-            {
-                return BadRequest($"Role '{role}' does not exist.");
-            }
+            var user = new IdentityUser 
+            { 
+                UserName = req.Email, 
+                Email = req.Email, 
+                EmailConfirmed = true };
+
+            var createRes = await _userManager.CreateAsync(user, req.Password);
+
+            if (!createRes.Succeeded) 
+                return BadRequest(createRes.Errors);
 
             await _userManager.AddToRoleAsync(user, role);
 
-            return Ok(new { message = "User created", user = user.Email, role });
+            return Ok(new { message = "User created", user = req.Email, role });
         }
 
         [HttpGet("me")]

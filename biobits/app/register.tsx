@@ -25,16 +25,17 @@ export default function RegisterScreen() {
 
     try {
       setBusy(true);
-      await signUp(email.trim(), password, displayName.trim() || undefined);
+      await signUp(email.trim(), password);
       router.replace("/"); 
     } catch (err: any) {
-      const msg =
-        err?.response?.data ??
-        err?.message ??
-        "Could not register. Check the API.";
-      Alert.alert("Registration failed", String(msg));
+        const data = err?.response?.data;
+        const msg =
+        Array.isArray(data)
+        ? data.map((e: any) => e?.description || e?.code || String(e)).join("\n")
+        : data?.message || err?.message || "Could not register.";
+        Alert.alert("Registration failed", msg);
     } finally {
-      setBusy(false);
+        setBusy(false);
     }
   };
 

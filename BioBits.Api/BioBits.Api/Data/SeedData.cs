@@ -16,14 +16,26 @@ namespace BioBits.Api.Data
             var roleManager = provider.GetRequiredService<RoleManager<IdentityRole>>();
             var userManager = provider.GetRequiredService<UserManager<IdentityUser>>();
 
-            string[] roles = new[] { "Admin", "Teacher", "Student", "Viewer" };
+            var allowed = new[] { "Admin", "Student" };
 
-            foreach (var r in roles)
+            foreach (var r in allowed)
             {
                 if (!await roleManager.RoleExistsAsync(r))
-                {
                     await roleManager.CreateAsync(new IdentityRole(r));
-                }
+            }
+
+            var allRoles = roleManager.Roles.ToList();
+            var toDelete = allRoles.Where(r => !allowed.Contains(r.Name!)).Select(r => r.Name!).ToList();
+
+            foreach (var roleName in toDelete)
+            {
+                var usersInRole = await userManager.GetUsersInRoleAsync(roleName);
+                foreach (var u in usersInRole)
+                    await userManager.RemoveFromRoleAsync(u, roleName);
+
+                var role = await roleManager.FindByNameAsync(roleName);
+                if (role != null)
+                    await roleManager.DeleteAsync(role);
             }
 
             const string adminEmail = "admin@biobits.local";
@@ -38,16 +50,14 @@ namespace BioBits.Api.Data
                     Email = adminEmail,
                     EmailConfirmed = true
                 };
-
                 var createResult = await userManager.CreateAsync(admin, adminPass);
                 if (createResult.Succeeded)
-                {
                     await userManager.AddToRoleAsync(admin, "Admin");
-                }
-                else
-                {
-                    // optionally log errors
-                }
+            }
+            else
+            {
+                if (!await userManager.IsInRoleAsync(admin, "Admin"))
+                    await userManager.AddToRoleAsync(admin, "Admin");
             }
         }
     }

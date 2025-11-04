@@ -20,14 +20,13 @@ function Header() {
   const pathname = usePathname();
   const { user, ready, signOut } = useAuth();
 
-  const isAuthPage = pathname === "/login" || pathname === "/register";
-  if (isAuthPage || !ready) return null;
+  if (!ready) return null;
 
-  const LinkBtn = ({ href, label, first = false }: { href: string; label: string; first?: boolean }) => {
+  const LinkBtn = ({ href, label, first = false }: { href: any; label: string; first?: boolean }) => {
     const active = pathname === href;
     return (
       <Pressable
-        onPress={() => router.push(href as any)}
+        onPress={() => router.push(href)}
         style={[hs.link, !first && hs.linkSpace, active && hs.active]}
         accessibilityRole="button"
       >
@@ -46,9 +45,7 @@ function Header() {
             <LinkBtn href="/tools"   label="DNA Tools" />
             <LinkBtn href="/quiz"    label="Quiz" />
             <LinkBtn href="/history" label="History" />
-            <Text style={[hs.linkText, hs.linkSpace]}>
-              {user.displayName ?? user.email}
-            </Text>
+            <Text style={[hs.linkText, hs.linkSpace]}>{user.displayName ?? user.email}</Text>
             <Pressable onPress={signOut} style={[hs.link, hs.linkSpace]}>
               <Text style={hs.linkText}>Logout</Text>
             </Pressable>
@@ -102,21 +99,18 @@ function RootLayoutNav() {
         <ToastProvider>
           <AuthGate>
             <Stack
-                screenOptions={{
-                  header: ({ route }) => {
-                    if (route.name === "index") return null;
-                    return <Header />;
-                  },
-                  contentStyle: { backgroundColor: "#fafafa" },
-                }}
-              >
-                <Stack.Screen name="index" />
-                <Stack.Screen name="login" />
-                <Stack.Screen name="register" />
-                <Stack.Screen name="tools" />
-                <Stack.Screen name="quiz" />
-                <Stack.Screen name="history" />
-              </Stack>
+              screenOptions={{
+                header: ({ route }) => (route.name === "index" ? null : <Header />),
+                contentStyle: { backgroundColor: "#fafafa" },
+              }}
+            >
+              <Stack.Screen name="index" />
+              <Stack.Screen name="login" />
+              <Stack.Screen name="register" />
+              <Stack.Screen name="tools" />
+              <Stack.Screen name="quiz" />
+              <Stack.Screen name="history" />
+            </Stack>
           </AuthGate>
         </ToastProvider>
       </AuthProvider>
