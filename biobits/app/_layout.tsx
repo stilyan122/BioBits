@@ -102,7 +102,7 @@ function RootLayoutNav() {
           <AuthGate>
             <Stack
               screenOptions={{
-                header: ({ route }) => (route.name === "index" ? null : <Header />),
+                header: () => <Header />,
                 contentStyle: { backgroundColor: "#fafafa" },
               }}
             >

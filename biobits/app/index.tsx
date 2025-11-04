@@ -26,49 +26,6 @@ export default function Home() {
 
   return (
     <ScrollView style={{ backgroundColor: "#f6f8fb" }} contentContainerStyle={S.page}>
-      <View style={S.header}>
-        <Logo size={28} onPress={() => router.push("/")} />
-
-        {user ? (
-          <View style={S.headerRight}>
-            <View style={{ alignItems: "flex-end", marginRight: 12 }}>
-              <Text style={S.user}>Hi, {name}</Text>
-              {roles.length > 0 && (
-                <View style={S.roleRow}>
-                  {roles.map((r) => (
-                    <View key={r} style={S.roleBadge}>
-                      <Text style={S.roleText}>{r}</Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </View>
-
-            <Pressable
-              style={S.btnGhost}
-              onPress={async () => {
-                await signOut();
-                router.replace("/login");
-              }}
-            >
-              <Text style={S.btnGhostText}>Logout</Text>
-            </Pressable>
-          </View>
-        ) : (
-          <View style={S.headerRight}>
-            <Pressable style={S.btnGhost} onPress={() => router.push("/login")}>
-              <Text style={S.btnGhostText}>Login</Text>
-            </Pressable>
-            <Pressable
-              style={[S.btnGhost, { marginLeft: 10 }]}
-              onPress={() => router.push("/register")}
-            >
-              <Text style={S.btnGhostText}>Register</Text>
-            </Pressable>
-          </View>
-        )}
-      </View>
-
       <View style={S.hero}>
         <Text style={S.kicker}>BioBits · Genetics · Tools · Learning</Text>
         <Text style={S.h1}>Precise tools for DNA work & practice</Text>
