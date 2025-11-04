@@ -7,7 +7,6 @@ export default function RegisterScreen() {
   const { signUp } = useAuth();
   const router = useRouter();
 
-  const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -28,27 +27,24 @@ export default function RegisterScreen() {
       await signUp(email.trim(), password);
       router.replace("/"); 
     } catch (err: any) {
-        const data = err?.response?.data;
-        const msg =
-        Array.isArray(data)
+      const data = err?.response?.data;
+
+      const msg = Array.isArray(data)
         ? data.map((e: any) => e?.description || e?.code || String(e)).join("\n")
         : data?.message || err?.message || "Could not register.";
-        Alert.alert("Registration failed", msg);
+
+      Alert.alert("Registration failed", msg);
     } finally {
-        setBusy(false);
+      setBusy(false);
     }
   };
 
   return (
     <View style={s.page}>
       <Text style={s.title}>Create account</Text>
-
-      <TextInput
-        style={s.input}
-        value={displayName}
-        onChangeText={setDisplayName}
-        placeholder="Display name (optional)"
-      />
+      <Text style={s.hint}>
+        Password must include upper & lower case, a digit, and a symbol.
+      </Text>
 
       <TextInput
         style={s.input}
@@ -66,6 +62,7 @@ export default function RegisterScreen() {
         onChangeText={setPassword}
         placeholder="Password"
         secureTextEntry
+        autoComplete="off"
       />
 
       <TextInput
@@ -74,6 +71,7 @@ export default function RegisterScreen() {
         onChangeText={setConfirm}
         placeholder="Confirm password"
         secureTextEntry
+        autoComplete="off"
       />
 
       <Pressable
@@ -83,6 +81,13 @@ export default function RegisterScreen() {
       >
         <Text style={s.btnText}>{busy ? "Creating..." : "Register"}</Text>
       </Pressable>
+
+      <Text style={s.smallRow}>
+        Already have an account?{" "}
+        <Text style={s.link} onPress={() => router.push("/login")}>
+          Login
+        </Text>
+      </Text>
     </View>
   );
 }
@@ -95,7 +100,8 @@ const s = StyleSheet.create({
     gap: 14,
     justifyContent: "center",
   },
-  title: { fontSize: 24, fontWeight: "800", color: "#0f172a", marginBottom: 8 },
+  title: { fontSize: 24, fontWeight: "800", color: "#0f172a", marginBottom: 6 },
+  hint: { color: "#64748b", marginBottom: 4, fontSize: 12 },
   input: {
     backgroundColor: "#fff",
     borderWidth: 1,
@@ -109,6 +115,9 @@ const s = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
     alignItems: "center",
+    marginTop: 4,
   },
   btnText: { color: "#fff", fontWeight: "700" },
+  smallRow: { marginTop: 10, color: "#64748b", textAlign: "center" },
+  link: { color: "#0b63ce", fontWeight: "800" },
 });

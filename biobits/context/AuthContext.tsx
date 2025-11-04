@@ -70,9 +70,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signUp = async (email: string, password: string) => {
-    await api.post(routes.register, { email, password, role: "Student" });
-    await signIn(email, password);
-  };  
+    try {
+      await api.post(routes.register, { email, password, role: "Student" });
+      await signIn(email, password);
+    } catch (err) {
+      throw err; 
+    }
+  }; 
 
   const signOut = () => {
     const refresh = getToken("refresh") as string | null;
