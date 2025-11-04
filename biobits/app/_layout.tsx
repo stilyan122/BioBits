@@ -9,6 +9,7 @@ import 'react-native-reanimated';
 import { ToastProvider } from "../components/Toast";
 import { AuthProvider, useAuth } from "../context/AuthContext";
 import AuthGate from "../components/AuthGate";
+import Logo from "../components/Logo";
 
 export { ErrorBoundary } from 'expo-router';
 export const unstable_settings = { initialRouteName: 'index' };
@@ -20,7 +21,8 @@ function Header() {
   const pathname = usePathname();
   const { user, ready, signOut } = useAuth();
 
-  if (!ready) return null;
+  if (!ready) 
+    return null;
 
   const LinkBtn = ({ href, label, first = false }: { href: any; label: string; first?: boolean }) => {
     const active = pathname === href;
@@ -37,7 +39,7 @@ function Header() {
 
   return (
     <View style={hs.wrap}>
-      <Text style={hs.brand}>BioBits</Text>
+      <Logo size={28} onPress={() => router.push("/")} />
       <View style={hs.row}>
         {user ? (
           <>

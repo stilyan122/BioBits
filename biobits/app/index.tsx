@@ -1,10 +1,9 @@
-// app/index.tsx
 import { useRouter, type Href } from "expo-router";
 import { ScrollView, StyleSheet, Text, View, Pressable } from "react-native";
 import HelixStripe from "../components/HelixStripe";
 import NavCard from "../components/NavCard";
 import { useAuth } from "../context/AuthContext";
-
+import Logo from "../components/Logo";
 
 export default function Home() {
   const router = useRouter();
@@ -28,7 +27,7 @@ export default function Home() {
   return (
     <ScrollView style={{ backgroundColor: "#f6f8fb" }} contentContainerStyle={S.page}>
       <View style={S.header}>
-        <Text style={S.brand}>BioBits</Text>
+        <Logo size={28} onPress={() => router.push("/")} />
 
         {user ? (
           <View style={S.headerRight}>
