@@ -4,8 +4,10 @@ import { useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import ProgressBar from "../components/ProgressBar";
 import { useToast } from "../components/Toast";
-import { addQuizHistory } from "../lib/history";
 import { makeQuestions, Question, QuizMode } from "../lib/quiz";
+import { postQuizLog } from "../lib/historyApi";            // ✅ DB logger
+import { useAuth } from "../context/AuthContext";            // ✅ auth
+import { useRouter } from "expo-router";                     // ✅ navigation
 
 // Small UI atoms
 function Pill({ active, label, onPress }: { active: boolean; label: string; onPress: () => void }) {
@@ -24,7 +26,7 @@ function PrimaryButton({ title, onPress }: { title: string; onPress: () => void 
   );
 }
 
-const MIN_Q = 1;  
+const MIN_Q = 1;
 const MAX_Q = 200;
 const clamp = (v: number, lo = MIN_Q, hi = MAX_Q) => Math.max(lo, Math.min(hi, v));
 
@@ -39,6 +41,8 @@ type AnswerRow = {
 
 export default function QuizScreen() {
   const toast = useToast();
+  const router = useRouter();
+  const { user } = useAuth();                              // ✅ current user
 
   // Config
   const [mode, setMode] = useState<QuizMode>("codon2aa");
@@ -58,19 +62,25 @@ export default function QuizScreen() {
   const [score, setScore] = useState(0);
   const [times, setTimes] = useState<number[]>([]);
   const [picked, setPicked] = useState<string | null>(null);
-  const [answers, setAnswers] = useState<AnswerRow[]>([]); // NEW: full review data
+  const [answers, setAnswers] = useState<AnswerRow[]>([]); // for review
 
   // Per-question timer start ms
   const t0 = useRef<number>(Date.now());
 
+  // Require auth before starting (DB-only mode)
   const begin = () => {
+    if (!user) {
+      toast.show("Please sign in to take a quiz.");
+      router.push("/login");
+      return;
+    }
     setSeed(Date.now() >>> 0); // fresh questions each start
     setStarted(true);
     setI(0);
     setScore(0);
     setTimes([]);
     setPicked(null);
-    setAnswers([]); // reset review
+    setAnswers([]);
     t0.current = Date.now();
   };
 
@@ -104,7 +114,7 @@ export default function QuizScreen() {
         setPicked(null);
         t0.current = Date.now();
       } else {
-        // Finished → jump to results
+        // Finished → jump to results + save to DB
         setPicked(choice);
         setI(qs.length);
 
@@ -114,8 +124,22 @@ export default function QuizScreen() {
           ? Math.round(nextTimes.reduce((a, b) => a + b, 0) / nextTimes.length)
           : 0;
 
-        await addQuizHistory({ score: finalScore, total, avgMs, seed });
-        toast.show("Quiz saved to History");
+        // ✅ DB write (no LocalStorage)
+        try {
+          await postQuizLog({
+            score: finalScore,
+            total,
+            avgMs,
+            kind: mode === "codon2aa" ? "codon->aa" : "aa->codon",
+          });
+          toast.show("Quiz saved.");
+        } catch (e: any) {
+          toast.show(
+            e?.response?.data?.message ??
+              (Array.isArray(e?.response?.data) ? e.response.data.map((x: any) => x?.description).join(", ") : e?.message) ??
+              "Failed to save quiz."
+          );
+        }
       }
     }, 400);
   };
@@ -162,19 +186,9 @@ export default function QuizScreen() {
 
         <View style={{ height: 12 }} />
         <View style={{ flexDirection: "row", gap: 12 }}>
-          <PrimaryButton
-            title="Restart"
-            onPress={() => {
-              setStarted(false); // back to start; Start will reseed and reset
-            }}
-          />
+          <PrimaryButton title="Restart" onPress={() => setStarted(false)} />
           <View style={{ width: 8 }} />
-          <PrimaryButton
-            title="Change settings"
-            onPress={() => {
-              setStarted(false);
-            }}
-          />
+          <PrimaryButton title="Change settings" onPress={() => setStarted(false)} />
         </View>
       </ScrollView>
     );

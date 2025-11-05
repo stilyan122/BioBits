@@ -1,3 +1,4 @@
+// app/tools.tsx
 import * as Clipboard from "expo-clipboard"; // npx expo install expo-clipboard
 import { useMemo, useState } from "react";
 import {
@@ -10,9 +11,11 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useRouter } from "expo-router";
 import { useToast } from "../components/Toast";
 import * as dna from "../lib/dna";
-import { addHistory } from "../lib/history";
+import { useAuth } from "../context/AuthContext";
+import { postDnaLog } from "../lib/historyApi"; // ✅ DB logger
 
 // Tiny pill-styled button
 function Btn({
@@ -54,21 +57,17 @@ function Pill({
   onPress: () => void;
 }) {
   return (
-    <Pressable
-      onPress={onPress}
-      style={[
-        styles.pill,
-        active ? styles.pillActive : styles.pillIdle,
-      ]}
-    >
-      <Text style={active ? styles.pillActiveText : styles.pillIdleText}>
-        {label}
-      </Text>
+    <Pressable onPress={onPress} style={[styles.pill, active ? styles.pillActive : styles.pillIdle]}>
+      <Text style={active ? styles.pillActiveText : styles.pillIdleText}>{label}</Text>
     </Pressable>
   );
 }
 
 export default function ToolsScreen() {
+  const router = useRouter();
+  const toast = useToast();
+  const { user } = useAuth(); // ✅ auth gate for save actions
+
   // Raw input
   const [seq, setSeq] = useState("");
 
@@ -79,16 +78,16 @@ export default function ToolsScreen() {
   // Derived values (fast O(n))
   const cleaned = useMemo(() => dna.clean(seq), [seq]);
   const rna = useMemo(() => dna.transcribe(seq), [seq]); // live preview
-  const aa  = useMemo(
+  const aa = useMemo(
     () => dna.translateFrame(rna, frame, trimStop ? "trim" : "keep"),
     [rna, frame, trimStop]
   ); // live preview with frame/stop
-  const gc  = useMemo(() => dna.gcContent(seq), [seq]);  // % with 2 d.p.
+  const gc = useMemo(() => dna.gcContent(seq), [seq]); // % with 2 d.p.
 
   // Enable/disable logic
-  const hasAnyInput   = seq.length > 0;
+  const hasAnyInput = seq.length > 0;
   const hasValidBases = cleaned.length > 0;
-  const canTranslate  = Math.max(0, rna.length - frame) >= 3; // at least one codon in that frame
+  const canTranslate = Math.max(0, rna.length - frame) >= 3;
 
   // Data-quality hint: any non-ACGT present?
   const hasNoise = useMemo(
@@ -96,8 +95,14 @@ export default function ToolsScreen() {
     [seq, cleaned]
   );
 
-  // Global toast
-  const toast = useToast();
+  const requireLogin = () => {
+    if (!user) {
+      toast.show("Please sign in to save history.");
+      router.push("/login");
+      return false;
+    }
+    return true;
+  };
 
   const copy = async (text: string, label = "Copied!") => {
     try {
@@ -108,35 +113,67 @@ export default function ToolsScreen() {
     }
   };
 
-  // Apply-actions that mutate the editor + log to history
+  // Apply-actions that mutate the editor + log to DB
   const run = async (type: "clean" | "revcomp") => {
     let output = "";
-    if (type === "clean")   output = cleaned;
+    if (type === "clean") output = cleaned;
     if (type === "revcomp") output = dna.reverseComplement(seq);
 
     setSeq(output);
-    await addHistory({ type, input: seq, output });
-    toast.show(type === "clean" ? "Cleaned" : "Reverse-complemented");
+
+    // Store to DB (guarded by auth)
+    if (!requireLogin()) return;
+    try {
+      await postDnaLog({
+        type,               // "clean" | "revcomp"
+        input: seq,
+        output,
+        metaJson: null,
+      });
+      toast.show(type === "clean" ? "Cleaned (saved)" : "Reverse-complemented (saved)");
+    } catch (e: any) {
+      toast.show(
+        e?.response?.data?.message ??
+          (Array.isArray(e?.response?.data) ? e.response.data.map((x: any) => x?.description).join(", ") : e?.message) ??
+          "Failed to save."
+      );
+    }
   };
 
   // Save-only actions: log results without changing the editor
   const saveTranscription = async () => {
     if (!hasValidBases) return;
-    await addHistory({ type: "transcribe", input: seq, output: rna });
-    toast.show("Transcription saved");
+    if (!requireLogin()) return;
+    try {
+      await postDnaLog({ type: "transcribe", input: seq, output: rna, metaJson: null });
+      toast.show("Transcription saved");
+    } catch (e: any) {
+      toast.show(
+        e?.response?.data?.message ??
+          (Array.isArray(e?.response?.data) ? e.response.data.map((x: any) => x?.description).join(", ") : e?.message) ??
+          "Failed to save."
+      );
+    }
   };
 
   const saveTranslation = async () => {
     if (!canTranslate) return;
-    // Store frame + trim meta in output label for quick recall
-    const note = ` (frame=${frame}${trimStop ? ", trim" : ""})`;
-    await addHistory({
-      type: "translate",
-      input: rna,
-      output: aa + note,
-      meta: { frame, trimStop },
-    } as any);
-    toast.show("Translation saved");
+    if (!requireLogin()) return;
+    try {
+      await postDnaLog({
+        type: "translate",
+        input: rna,
+        output: aa,
+        metaJson: JSON.stringify({ frame, trimStop }), 
+      });
+      toast.show("Translation saved");
+    } catch (e: any) {
+      toast.show(
+        e?.response?.data?.message ??
+          (Array.isArray(e?.response?.data) ? e.response.data.map((x: any) => x?.description).join(", ") : e?.message) ??
+          "Failed to save."
+      );
+    }
   };
 
   return (
@@ -145,7 +182,8 @@ export default function ToolsScreen() {
       <View style={styles.headerCard}>
         <Text style={styles.h1}>DNA Tools</Text>
         <Text style={styles.sub}>
-          Paste a DNA sequence and run Clean or Reverse-complement. RNA and AA update live. You can Copy or save Transcription/Translation to History.
+          Paste a DNA sequence and run Clean or Reverse-complement. RNA and AA update live. You can Copy or save
+          Transcription/Translation to your account history.
         </Text>
 
         {/* Stats row */}
@@ -186,8 +224,8 @@ export default function ToolsScreen() {
 
         {/* Apply + Save actions */}
         <View style={styles.actionsRow}>
-          <Btn title="Clean" onPress={() => run("clean")} disabled={!hasAnyInput} />
-          <Btn title="Reverse-complement" onPress={() => run("revcomp")} disabled={!hasValidBases} />
+          <Btn title="Clean (save)" onPress={() => run("clean")} disabled={!hasAnyInput} />
+          <Btn title="Reverse-complement (save)" onPress={() => run("revcomp")} disabled={!hasValidBases} />
           <Btn title="Transcribe (save)" onPress={saveTranscription} disabled={!hasValidBases} />
           <Btn title="Translate (save)" onPress={saveTranslation} disabled={!canTranslate} />
         </View>
@@ -212,11 +250,7 @@ export default function ToolsScreen() {
           <Pill active={frame === 2} label="2" onPress={() => setFrame(2)} />
 
           <View style={{ width: 8 }} />
-          <Pill
-            active={trimStop}
-            label="Trim at stop (*)"
-            onPress={() => setTrimStop((v) => !v)}
-          />
+          <Pill active={trimStop} label="Trim at stop (*)" onPress={() => setTrimStop((v) => !v)} />
         </View>
       </View>
 
@@ -234,7 +268,7 @@ export default function ToolsScreen() {
 
       {/* Footer note */}
       <View style={styles.footer}>
-        <Text style={styles.footnote}>All processing is local; history is stored on device.</Text>
+        <Text style={styles.footnote}>Processing is local; history is saved to your BioBits account.</Text>
       </View>
     </ScrollView>
   );
