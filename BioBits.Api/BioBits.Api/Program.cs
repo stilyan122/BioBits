@@ -42,10 +42,11 @@ builder.Services.AddAuthorization();
 builder.Services.AddControllers();
 
 builder.Services.AddCors(o => o.AddPolicy("dev", p => p
-    .WithOrigins(
-        "http://localhost:8081",  
-        "http://localhost:19006", 
-        "http://127.0.0.1:19006"   
+     .WithOrigins(
+        "http://localhost:19006",
+        "http://127.0.0.1:19006",
+        "http://localhost:8081",
+        "http://127.0.0.1:8081"
     )
     .AllowAnyHeader()
     .AllowAnyMethod()

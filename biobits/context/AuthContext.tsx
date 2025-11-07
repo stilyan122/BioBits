@@ -42,7 +42,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    console.log("SIGNIN CALLED with:", email);
     const { data } = await api.post(routes.login, { email, password });
 
     const access =
@@ -58,7 +57,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       null;
 
     if (!access) {
-      console.log("LOGIN RESPONSE (unexpected):", data);
       throw new Error("API did not return an access token");
     }
 

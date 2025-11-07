@@ -47,6 +47,7 @@ function Header() {
             <LinkBtn href="/tools"   label="DNA Tools" />
             <LinkBtn href="/quiz"    label="Quiz" />
             <LinkBtn href="/history" label="History" />
+            {user?.roles?.includes("Admin") && <LinkBtn href="/admin" label="Admin" />}
             <Text style={[hs.linkText, hs.linkSpace]}>{user.displayName ?? user.email}</Text>
             <Pressable onPress={signOut} style={[hs.link, hs.linkSpace]}>
               <Text style={hs.linkText}>Logout</Text>
@@ -112,6 +113,7 @@ function RootLayoutNav() {
               <Stack.Screen name="tools" />
               <Stack.Screen name="quiz" />
               <Stack.Screen name="history" />
+              <Stack.Screen name="admin" />
             </Stack>
           </AuthGate>
         </ToastProvider>
