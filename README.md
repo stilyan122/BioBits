@@ -99,7 +99,7 @@ BioBits.Api/
 
 ### 1️⃣ Clone & setup
 ```bash
-git clone https://github.com/<your-username>/BioBits.git
+git clone https://github.com/stilyan122/BioBits.git
 cd BioBits
 ```
 
